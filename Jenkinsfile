@@ -1,21 +1,17 @@
-// Jenkinsfile - Final Correct Version
-
+// Jenkinsfile
 pipeline {
-    // [KEY ARCHITECTURAL CHANGE]
-    // We set the top-level agent to 'none'.
-    // This tells Jenkins: "Do not use a single agent for the entire pipeline.
-    // I will specify the correct agent for each stage individually."
     agent none
 
     environment {
-        DOCK-ERHUB_USERNAME = 'xqy1' 
+        // [TYPO FIXED HERE]
+        DOCKERHUB_USERNAME = 'xqy1' 
         IMAGE_NAME         = "${DOCKERHUB_USERNAME}/isec6000-nodejs-app"
         IMAGE_TAG          = "1.0.${BUILD_NUMBER}"
     }
 
     stages {
 
-        // For stages requiring Node.js, we explicitly ask for the docker agent.
+        // For stages requiring Node.js, we explicitly use the docker agent.
         stage('Install Dependencies') {
             agent {
                 docker {
@@ -63,10 +59,8 @@ pipeline {
             }
         }
 
-        // For the stage requiring the Docker CLI, we explicitly ask for the default Jenkins agent.
+        // For the stage requiring the Docker CLI, we use the default Jenkins agent.
         stage('Build and Push Docker Image') {
-            // 'agent any' now correctly tells Jenkins to run this on the main controller,
-            // because there is no top-level agent trapping the execution context.
             agent any
             steps {
                 script {
@@ -91,7 +85,6 @@ pipeline {
 
     post {
         always {
-            // This runs on the controller by default.
             echo 'Pipeline finished. Cleaning up workspace...'
             cleanWs()
         }

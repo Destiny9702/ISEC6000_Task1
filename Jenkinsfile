@@ -1,78 +1,75 @@
-// Jenkinsfile
+// Jenkinsfile - Final Correct Version
 
-// The 'pipeline' block is the root for all Declarative Pipelines.
 pipeline {
-    // The 'agent' section specifies where the entire Pipeline will execute.
-    // Requirement 1.b.i: Use the Node 16 Docker image as the build agent.
-    agent {
-        docker {
-            image 'node:16-alpine' // Use a lightweight, Alpine-based Node 16 image.
-            args '-u root' // Run as the root user inside the container to avoid permission issues with npm and Docker commands.
-        }
-    }
+    // [KEY ARCHITECTURAL CHANGE]
+    // We set the top-level agent to 'none'.
+    // This tells Jenkins: "Do not use a single agent for the entire pipeline.
+    // I will specify the correct agent for each stage individually."
+    agent none
 
-    // The 'environment' block defines environment variables that will be available to all stages.
     environment {
-        //Docker Hub configuration.
-        DOCKERHUB_USERNAME = 'xqy1' 
+        DOCK-ERHUB_USERNAME = 'xqy1' 
         IMAGE_NAME         = "${DOCKERHUB_USERNAME}/isec6000-nodejs-app"
-        // Use Jenkins' built-in BUILD_NUMBER variable to generate a unique tag for each build.
         IMAGE_TAG          = "1.0.${BUILD_NUMBER}"
     }
 
-    // The 'stages' block contains all the execution stages of the pipeline.
     stages {
 
-        // Stage 1: Install Project Dependencies
-        // Requirement 1.b.ii (part 1): Install dependencies.
+        // For stages requiring Node.js, we explicitly ask for the docker agent.
         stage('Install Dependencies') {
+            agent {
+                docker {
+                    image 'node:16-alpine'
+                    args '-u root'
+                }
+            }
             steps {
                 echo 'Installing NPM dependencies using npm ci...'
-                // Use 'npm ci' instead of 'npm install'. The 'ci' command performs a clean install based on the 
-                // package-lock.json file, which is faster and ensures consistent builds in a CI environment. This is a best practice.
                 sh 'npm ci'
             }
         }
 
-        // Stage 2: Run Unit Tests
-        // Requirement 1.b.ii (part 2): Run unit tests.
         stage('Run Unit Tests') {
+            agent {
+                docker {
+                    image 'node:16-alpine'
+                    args '-u root'
+                }
+            }
             steps {
                 echo 'Running unit tests...'
                 sh 'npm test'
             }
         }
 
-        // Stage 3: Security Scan with Snyk
-        // Requirement 2.a & 2.b: Integrate a vulnerability scanner and fail the build if high/critical issues are detected.
         stage('Security Scan with Snyk') {
+            agent {
+                docker {
+                    image 'node:16-alpine'
+                    args '-u root'
+                }
+            }
             steps {
                 script {
-                    // The withCredentials block securely loads the Snyk token from the Jenkins Credentials store.
                     withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
                         echo 'Installing Snyk CLI...'
-                        sh 'npm install -g snyk' // Globally install the Snyk CLI tool in the build environment.
-
+                        sh 'npm install -g snyk'
                         echo 'Authenticating with Snyk...'
-                        sh 'snyk auth ${SNYK_TOKEN}' // Authenticate using the token.
-
+                        sh 'snyk auth ${SNYK_TOKEN}'
                         echo 'Scanning for vulnerabilities...'
-                        // Run 'snyk test' with '--severity-threshold=high'.
-                        // If Snyk finds any vulnerabilities of 'high' or 'critical' severity, this command will exit with a non-zero status code,
-                        // which automatically fails the current stage and stops the pipeline.
                         sh 'snyk test --severity-threshold=high'
                     }
                 }
             }
         }
 
-        // Stage 4: Build and Push Docker Image
+        // For the stage requiring the Docker CLI, we explicitly ask for the default Jenkins agent.
         stage('Build and Push Docker Image') {
-            // The controller has the Docker CLI because we mounted it in docker-compose.yml.
+            // 'agent any' now correctly tells Jenkins to run this on the main controller,
+            // because there is no top-level agent trapping the execution context.
             agent any
             steps {
                 script {
-                    // Step 1: Dynamically create the Dockerfile in the workspace.
                     writeFile file: 'Dockerfile', text: """
                     FROM node:16-alpine
                     WORKDIR /app
@@ -83,11 +80,7 @@ pipeline {
                     CMD ["node", "app.js"]
                     """
 
-                    // Step 2: Use withRegistry for secure login and context.
                     docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-credentials') {
-                        
-                        // Step 3: Build the image and push it.
-                        // These commands will now run on the Jenkins controller, where 'docker' command exists.
                         echo "Building and pushing image: ${IMAGE_NAME}:${IMAGE_TAG}"
                         docker.build("${IMAGE_NAME}:${IMAGE_TAG}").push()
                     }
@@ -96,12 +89,10 @@ pipeline {
         }
     }
 
-    // The 'post' block defines actions that will be run at the end of the Pipeline's execution.
     post {
-        // 'always' means the steps inside will execute regardless of the Pipeline's success, failure, or abortion.
         always {
+            // This runs on the controller by default.
             echo 'Pipeline finished. Cleaning up workspace...'
-            // cleanWs() is a built-in function that deletes the workspace files, which helps save disk space on the Jenkins server.
             cleanWs()
         }
     }

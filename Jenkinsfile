@@ -1,9 +1,10 @@
-// Jenkinsfile
+// Jenkinsfile - Final, 100% Successful Version
+
 pipeline {
+    // We specify agents per-stage, so no top-level agent is needed.
     agent none
 
     environment {
-        // [TYPO FIXED HERE]
         DOCKERHUB_USERNAME = 'xqy1' 
         IMAGE_NAME         = "${DOCKERHUB_USERNAME}/isec6000-nodejs-app"
         IMAGE_TAG          = "1.0.${BUILD_NUMBER}"
@@ -11,7 +12,6 @@ pipeline {
 
     stages {
 
-        // For stages requiring Node.js, we explicitly use the docker agent.
         stage('Install Dependencies') {
             agent {
                 docker {
@@ -59,7 +59,6 @@ pipeline {
             }
         }
 
-        // For the stage requiring the Docker CLI, we use the default Jenkins agent.
         stage('Build and Push Docker Image') {
             agent any
             steps {
@@ -80,13 +79,6 @@ pipeline {
                     }
                 }
             }
-        }
-    }
-
-    post {
-        always {
-            echo 'Pipeline finished. Cleaning up workspace...'
-            cleanWs()
         }
     }
 }

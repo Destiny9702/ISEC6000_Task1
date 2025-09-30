@@ -71,18 +71,29 @@ pipeline {
         stage('Build and Push Docker Image') {
             steps {
                 script {
+                    // Step 1: Dynamically create a Dockerfile in the workspace.
+                    // The 'docker build .' command needs this file to exist.
+                    writeFile file: 'Dockerfile', text: """
+                    FROM node:16-alpine
+                    WORKDIR /app
+                    COPY package*.json ./
+                    RUN npm install --production
+                    COPY . .
+                    EXPOSE 3000
+                    CMD ["node", "app.js"]
+                    """
+    
                     echo "Building Docker image: ${IMAGE_NAME}:${IMAGE_TAG}"
-                    // Securely log in to Docker Hub using credentials stored in Jenkins.
+                    // Step 2: Use the idiomatic docker.build() command provided by the Docker Pipeline plugin.
+                    // This command runs in the correct context (the Jenkins controller), not inside the node agent.
+                    def customImage = docker.build("${IMAGE_NAME}:${IMAGE_TAG}")
+    
+                    // Step 3: Use withCredentials to securely push the image.
                     withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        // Log in to Docker Hub.
-                        sh "docker login -u ${DOCKER_USER} -p ${DOCKER_PASS}"
-                        
-                        // Build the Docker image. The '-t' flag tags the image with a name and tag.
-                        // The '.' indicates that the Dockerfile is in the current directory.
-                        sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
-                        
-                        // Push the newly built image to the Docker Hub repository.
-                        sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
+                        echo "Pushing Docker image to Docker Hub..."
+                        // The .push() method is called on the image object returned by docker.build().
+                        // This also runs in the correct context.
+                        customImage.push()
                     }
                 }
             }

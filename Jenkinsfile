@@ -67,12 +67,10 @@ pipeline {
         }
 
         // Stage 4: Build and Push Docker Image
-        // Requirement 1.b.ii (parts 3 & 4): Build a Docker image and push it to a registry.
         stage('Build and Push Docker Image') {
             steps {
                 script {
-                    // Step 1: Dynamically create a Dockerfile in the workspace.
-                    // The 'docker build .' command needs this file to exist.
+                    // Step 1: Dynamically create the Dockerfile.
                     writeFile file: 'Dockerfile', text: """
                     FROM node:16-alpine
                     WORKDIR /app
@@ -82,18 +80,16 @@ pipeline {
                     EXPOSE 3000
                     CMD ["node", "app.js"]
                     """
-    
-                    echo "Building Docker image: ${IMAGE_NAME}:${IMAGE_TAG}"
-                    // Step 2: Use the idiomatic docker.build() command provided by the Docker Pipeline plugin.
-                    // This command runs in the correct context (the Jenkins controller), not inside the node agent.
-                    def customImage = docker.build("${IMAGE_NAME}:${IMAGE_TAG}")
-    
-                    // Step 3: Use withCredentials to securely push the image.
-                    withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        echo "Pushing Docker image to Docker Hub..."
-                        // The .push() method is called on the image object returned by docker.build().
-                        // This also runs in the correct context.
-                        customImage.push()
+
+                    // Step 2: Use withRegistry for secure login and context.
+                    // This block ensures all Docker commands inside it are authenticated.
+                    docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-credentials') {
+                        
+                        // Step 3: Build the image and directly chain the .push() method.
+                        // This syntax is explicit: build this image, then immediately push it.
+                        // Jenkins will execute this on the controller, where the Docker client is available.
+                        echo "Building and pushing image: ${IMAGE_NAME}:${IMAGE_TAG}"
+                        docker.build("${IMAGE_NAME}:${IMAGE_TAG}").push()
                     }
                 }
             }

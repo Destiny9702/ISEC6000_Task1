@@ -68,9 +68,11 @@ pipeline {
 
         // Stage 4: Build and Push Docker Image
         stage('Build and Push Docker Image') {
+            // The controller has the Docker CLI because we mounted it in docker-compose.yml.
+            agent any
             steps {
                 script {
-                    // Step 1: Dynamically create the Dockerfile.
+                    // Step 1: Dynamically create the Dockerfile in the workspace.
                     writeFile file: 'Dockerfile', text: """
                     FROM node:16-alpine
                     WORKDIR /app
@@ -82,12 +84,10 @@ pipeline {
                     """
 
                     // Step 2: Use withRegistry for secure login and context.
-                    // This block ensures all Docker commands inside it are authenticated.
                     docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-credentials') {
                         
-                        // Step 3: Build the image and directly chain the .push() method.
-                        // This syntax is explicit: build this image, then immediately push it.
-                        // Jenkins will execute this on the controller, where the Docker client is available.
+                        // Step 3: Build the image and push it.
+                        // These commands will now run on the Jenkins controller, where 'docker' command exists.
                         echo "Building and pushing image: ${IMAGE_NAME}:${IMAGE_TAG}"
                         docker.build("${IMAGE_NAME}:${IMAGE_TAG}").push()
                     }

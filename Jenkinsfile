@@ -8,6 +8,8 @@ pipeline {
 -e DOCKER_CERT_PATH=/certs/client
 -e DOCKER_TLS_VERIFY=1
 -v jenkins-docker-certs:/certs/client:ro
+-v jenkins-data:/var/jenkins_home
+
 '''
         }
     }

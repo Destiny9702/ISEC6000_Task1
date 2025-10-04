@@ -3,7 +3,7 @@ pipeline {
     agent {
         docker {
             image 'node:16-alpine'
-            args '-u root'
+            args '-u root -v jenkins-docker-certs:/certs/client:ro' 
         }
     }
 
@@ -11,6 +11,10 @@ pipeline {
         DOCKERHUB_USERNAME = 'xqy1' 
         IMAGE_NAME         = "${DOCKERHUB_USERNAME}/isec6000"
         IMAGE_TAG          = "Final"
+         //  Tell the Docker CLI in the agent container how to find the DinD service over the network.
+        DOCKER_HOST        = 'tcp://docker:2376'
+        DOCKER_CERT_PATH   = '/certs/client'
+        DOCKER_TLS_VERIFY  = '1'
     }
 
     stages {

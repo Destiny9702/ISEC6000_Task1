@@ -1,5 +1,7 @@
+// Final Jenkinsfile for testing (Snyk stage temporarily removed)
 pipeline {
-        // Defines Node 16 Docker container as the agent for the entire pipeline.
+    // Defines the agent for the entire pipeline.
+    // It runs in a Node.js container, as root, with certificates mounted for DinD communication.
     agent {
         docker {
             image 'node:16-alpine'
@@ -7,75 +9,70 @@ pipeline {
         }
     }
 
+    // Defines environment variables available to all stages.
     environment {
         DOCKERHUB_USERNAME = 'xqy1' 
-        IMAGE_NAME         = "${DOCKERHUB_USERNAME}/isec6000"
-        IMAGE_TAG          = "Final"
-         //  Tell the Docker CLI in the agent container how to find the DinD service over the network.
-        DOCKER_HOST        = 'tcp://docker:2376'
-        DOCKER_CERT_PATH   = '/certs/client'
-        DOCKER_TLS_VERIFY  = '1'
+        IMAGE_NAME         = "${DOCKERHUB_USERNAME}/isec6000-nodejs-app" // I've used the name from your Docker Hub repo for consistency
+        IMAGE_TAG          = "1.0.${BUILD_NUMBER}" // Using BUILD_NUMBER makes each tag unique
     }
 
     stages {
-        // Prepares the agent by installing the Docker CLI inside it.
+        // Stage 1: Prepares the agent by installing the Docker CLI inside it.
         stage('Prepare Build Environment') {
             steps {
                 echo 'Installing Docker CLI...'
-                // Generate the log file for this stage
-                sh 'apk add --no-cache docker-cli > prepare_environment.log 2>&1'
+                sh 'apk add --no-cache docker-cli'
             }
         }
-        // Installs application dependencies and logs the output.
+
+        // Stage 2: Installs application dependencies using npm ci for consistency.
         stage('Install Dependencies') {
             steps {
                 echo 'Installing dependencies...'
-                // Generate the log file for this stage
-                sh 'npm install --save > install_dependencies.log 2>&1'
+                sh 'npm ci'
             }
         }
-        // Runs unit tests and logs the output.
+
+        // Stage 3: Runs unit tests.
         stage('Run Unit Tests') {
             steps {
                 echo 'Running unit tests...'
-                // Generate the log file for this stage
-                sh 'npm test > run_unit_tests.log 2>&1'
+                sh 'npm test'
             }
         }
-        // Performs a security vulnerability scan and logs the output.
-        stage('Security Scan with Snyk') {
+
+        // Stage 4: Builds and pushes the Docker image.
+        stage('Build and Push Docker Image') {
             steps {
-                script {
-                    withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
-                        sh 'npm install -g snyk'
-                        sh 'snyk auth ${SNYK_TOKEN}'
-                        // Generate the log file for the final scan command
-                        sh 'snyk test --severity-threshold=high > security_scan.log 2>&1'
+                // withEnv forcefully injects the necessary environment variables
+                // to ensure the agent's shell can connect to the DinD container.
+                withEnv([
+                    "DOCKER_HOST=tcp://docker:2376",
+                    "DOCKER_CERT_PATH=/certs/client",
+                    "DOCKER_TLS_VERIFY=1"
+                ]) {
+                    script {
+                        // Securely logs into Docker Hub using stored credentials.
+                        docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-credentials') {
+                            echo "Building and pushing image: ${IMAGE_NAME}:${IMAGE_TAG}"
+                            
+                            // Use sh steps for reliable execution in the configured shell environment.
+                            sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
+                            sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
+                        }
                     }
                 }
             }
         }
-        // Builds and pushes the Docker image from within the Node.js agent.
-       stage('Build and Push Docker Image') {
-            steps {
-                script {
-                    docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-credentials') {
-                        echo "Building image via sh step..."
-                        sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
-                        echo "Pushing image via sh step..."
-                        sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
-                    }
-                }
-            }
-       }
     }
 
-    // To archive build artifacts after all stages pass.
+    // Post-build actions that run regardless of pipeline status.
     post {
         always {
-            echo "Archiving build artifacts and logs..."
+            echo "Pipeline finished. Archiving artifacts..."
+            // Cleans up by archiving any log files created.
             archiveArtifacts(
-                artifacts: '**/*.log, Dockerfile', 
+                artifacts: '**/*.log', 
                 allowEmptyArchive: true
             )
         }

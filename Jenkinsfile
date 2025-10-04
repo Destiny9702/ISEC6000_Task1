@@ -4,7 +4,6 @@ pipeline {
             image 'node:16-alpine'
             args '''
 -u root
---network jenkins_net
 -e DOCKER_HOST=tcp://docker:2376
 -e DOCKER_CERT_PATH=/certs/client
 -e DOCKER_TLS_VERIFY=1
@@ -87,9 +86,15 @@ pipeline {
 
     post {
         always {
-            echo 'Pipeline execution completed.'
-            // Archive logs
-            archiveArtifacts artifacts: '*.log', allowEmptyArchive: true
+            script {
+                // Archive logs if workspace is available
+                try {
+                    archiveArtifacts artifacts: '*.log', allowEmptyArchive: true
+                    echo 'Pipeline execution completed.'
+                } catch (Exception e) {
+                    echo "Could not archive artifacts: ${e.message}"
+                }
+            }
         }
         success {
             echo "Build successful! Image pushed: ${IMAGE_NAME}:${IMAGE_TAG}"

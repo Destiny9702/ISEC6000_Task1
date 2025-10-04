@@ -56,17 +56,18 @@ pipeline {
             }
         }
         // Builds and pushes the Docker image from within the Node.js agent.
-        stage('Build and Push Docker Image') {
+       stage('Build and Push Docker Image') {
             steps {
                 script {
                     docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-credentials') {
-                        echo "Building and pushing image..."
-                        // Achive the Dockerfile as this stage's artifact.
-                        docker.build("${IMAGE_NAME}:${IMAGE_TAG}").push()
+                        echo "Building image via sh step..."
+                        sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
+                        echo "Pushing image via sh step..."
+                        sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
                     }
                 }
             }
-        }
+       }
     }
 
     // To archive build artifacts after all stages pass.

@@ -1,84 +1,74 @@
-// Jenkinsfile - Final, 100% Successful Version
-
 pipeline {
-    // We specify agents per-stage, so no top-level agent is needed.
-    agent none
+    // Requirement: Use a single Node 16 Docker image as the build agent for the entire pipeline.
+    agent {
+        docker {
+            image 'node:16-alpine'
+            args '-u root -v /var/run/docker.sock:/var/run/docker.sock' // Mount Docker socket into the agent
+        }
+    }
 
     environment {
         DOCKERHUB_USERNAME = 'xqy1' 
-        IMAGE_NAME         = "${DOCKERHUB_USERNAME}/isec6000-nodejs-app"
+        IMAGE_NAME         = "${DOCKERHUB_USERNAME}/isec6000"
         IMAGE_TAG          = "1.0.${BUILD_NUMBER}"
     }
 
     stages {
 
-        stage('Install Dependencies') {
-            agent {
-                docker {
-                    image 'node:16-alpine'
-                    args '-u root'
-                }
-            }
+        // This stage prepares the build agent by installing the Docker CLI.
+        stage('Prepare Build Environment') {
             steps {
-                echo 'Installing NPM dependencies using npm ci...'
-                sh 'npm ci'
+                echo 'Installing Docker CLI inside the agent...'
+                sh 'apk add --no-cache docker-cli'
             }
         }
 
-        stage('Run Unit Tests') {
-            agent {
-                docker {
-                    image 'node:16-alpine'
-                    args '-u root'
-                }
+        // This stage installs dependencies as requested.
+        stage('Install Dependencies') {
+            steps {
+                echo 'Installing dependencies using npm install...'
+                sh 'npm install --save'
             }
+        }
+
+        // This stage runs unit tests.
+        stage('Run Unit Tests') {
             steps {
                 echo 'Running unit tests...'
                 sh 'npm test'
             }
         }
 
+        // This stage performs the security scan.
         stage('Security Scan with Snyk') {
-            agent {
-                docker {
-                    image 'node:16-alpine'
-                    args '-u root'
-                }
-            }
             steps {
                 script {
                     withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
-                        echo 'Installing Snyk CLI...'
                         sh 'npm install -g snyk'
-                        echo 'Authenticating with Snyk...'
                         sh 'snyk auth ${SNYK_TOKEN}'
-                        echo 'Scanning for vulnerabilities...'
                         sh 'snyk test --severity-threshold=high'
                     }
                 }
             }
         }
 
+        // This stage builds and pushes the image. 
         stage('Build and Push Docker Image') {
-            agent any
             steps {
                 script {
-                    writeFile file: 'Dockerfile', text: """
-                    FROM node:16-alpine
-                    WORKDIR /app
-                    COPY package*.json ./
-                    RUN npm install --production
-                    COPY . .
-                    EXPOSE 3000
-                    CMD ["node", "app.js"]
-                    """
-
                     docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-credentials') {
                         echo "Building and pushing image: ${IMAGE_NAME}:${IMAGE_TAG}"
                         docker.build("${IMAGE_NAME}:${IMAGE_TAG}").push()
                     }
                 }
             }
+        }
+    }
+
+    post {
+        success {
+            echo "Pipeline successful. Archiving the Dockerfile..."
+            archiveArtifacts artifacts: 'Dockerfile', allowEmptyArchive: true
         }
     }
 }

@@ -3,16 +3,15 @@ pipeline {
         docker {
             image 'node:16-alpine'
             args '''
-                -u root
-                --network jenkins_net
-                -e DOCKER_HOST=tcp://docker:2376
-                -e DOCKER_CERT_PATH=/certs/client
-                -e DOCKER_TLS_VERIFY=1
-                -v /certs/client:/certs/client:ro
-            '''
+-u root
+--network jenkins_net
+-e DOCKER_HOST=tcp://docker:2376
+-e DOCKER_CERT_PATH=/certs/client
+-e DOCKER_TLS_VERIFY=1
+-v jenkins-docker-certs:/certs/client:ro
+'''
         }
     }
-
 
     environment {
         DOCKERHUB_USERNAME = 'xqy1'
@@ -43,6 +42,8 @@ pipeline {
             }
         }
 
+        // Optional: Security Scan with Snyk
+        // Uncomment if you have Snyk token configured
         // stage('Security Scan with Snyk') {
         //     steps {
         //         script {
@@ -58,11 +59,27 @@ pipeline {
         stage('Build and Push Docker Image') {
             steps {
                 script {
+                    echo "Building Docker image: ${IMAGE_NAME}:${IMAGE_TAG}"
                     
-                    docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-credentials') {
-                        echo "Building and pushing image..."
-                        docker.build("${IMAGE_NAME}:${IMAGE_TAG}").push()
+                    // Build the Docker image
+                    sh """
+                        docker build -t ${IMAGE_NAME}:${IMAGE_TAG} . > docker_build.log 2>&1
+                        docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest
+                    """
+                    
+                    // Push to Docker Hub
+                    withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', 
+                                                      usernameVariable: 'DOCKER_USER', 
+                                                      passwordVariable: 'DOCKER_PASS')]) {
+                        sh """
+                            echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+                            docker push ${IMAGE_NAME}:${IMAGE_TAG} > docker_push.log 2>&1
+                            docker push ${IMAGE_NAME}:latest >> docker_push.log 2>&1
+                            docker logout
+                        """
                     }
+                    
+                    echo "Successfully pushed ${IMAGE_NAME}:${IMAGE_TAG} and ${IMAGE_NAME}:latest"
                 }
             }
         }
@@ -70,11 +87,15 @@ pipeline {
 
     post {
         always {
-            echo "Archiving build artifacts and logs..."
-            archiveArtifacts(
-                artifacts: '**/*.log, Dockerfile',
-                allowEmptyArchive: true
-            )
+            echo 'Pipeline execution completed.'
+            // Archive logs
+            archiveArtifacts artifacts: '*.log', allowEmptyArchive: true
+        }
+        success {
+            echo "Build successful! Image pushed: ${IMAGE_NAME}:${IMAGE_TAG}"
+        }
+        failure {
+            echo 'Build failed. Check logs for details.'
         }
     }
 }

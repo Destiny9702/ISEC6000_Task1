@@ -3,10 +3,11 @@ pipeline {
         docker {
             image 'node:16-alpine'
             args '''
-                -u root 
-                -e DOCKER_HOST=tcp://docker:2376 
-                -e DOCKER_CERT_PATH=/certs/client 
-                -e DOCKER_TLS_VERIFY=1 
+                -u root
+                --network jenkins_net
+                -e DOCKER_HOST=tcp://docker:2376
+                -e DOCKER_CERT_PATH=/certs/client
+                -e DOCKER_TLS_VERIFY=1
                 -v /certs/client:/certs/client:ro
             '''
         }

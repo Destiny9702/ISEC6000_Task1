@@ -1,63 +1,62 @@
 pipeline {
-    // Requirement: Use a single Node 16 Docker image as the build agent for the entire pipeline.
+        // Defines Node 16 Docker container as the agent for the entire pipeline.
     agent {
         docker {
             image 'node:16-alpine'
-            args '-u root -v /var/run/docker.sock:/var/run/docker.sock' // Mount Docker socket into the agent
         }
     }
 
     environment {
         DOCKERHUB_USERNAME = 'xqy1' 
         IMAGE_NAME         = "${DOCKERHUB_USERNAME}/isec6000"
-        IMAGE_TAG          = "1.0.${BUILD_NUMBER}"
+        IMAGE_TAG          = "Final"
     }
 
     stages {
-
-        // This stage prepares the build agent by installing the Docker CLI.
+        // Prepares the agent by installing the Docker CLI inside it.
         stage('Prepare Build Environment') {
             steps {
-                echo 'Installing Docker CLI inside the agent...'
-                sh 'apk add --no-cache docker-cli'
+                echo 'Installing Docker CLI...'
+                // Generate the log file for this stage
+                sh 'apk add --no-cache docker-cli > prepare_environment.log 2>&1'
             }
         }
-
-        // This stage installs dependencies as requested.
+        // Installs application dependencies and logs the output.
         stage('Install Dependencies') {
             steps {
-                echo 'Installing dependencies using npm install...'
-                sh 'npm install --save'
+                echo 'Installing dependencies...'
+                // Generate the log file for this stage
+                sh 'npm install --save > install_dependencies.log 2>&1'
             }
         }
-
-        // This stage runs unit tests.
+        // Runs unit tests and logs the output.
         stage('Run Unit Tests') {
             steps {
                 echo 'Running unit tests...'
-                sh 'npm test'
+                // Generate the log file for this stage
+                sh 'npm test > run_unit_tests.log 2>&1'
             }
         }
-
-        // This stage performs the security scan.
+        // Performs a security vulnerability scan and logs the output.
         stage('Security Scan with Snyk') {
             steps {
                 script {
                     withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
                         sh 'npm install -g snyk'
                         sh 'snyk auth ${SNYK_TOKEN}'
-                        sh 'snyk test --severity-threshold=high'
+                        // Generate the log file for the final scan command
+                        sh 'snyk test --severity-threshold=high > security_scan.log 2>&1'
                     }
                 }
             }
         }
-
-        // This stage builds and pushes the image. 
+        // Builds and pushes the Docker image from within the Node.js agent.
         stage('Build and Push Docker Image') {
             steps {
                 script {
                     docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-credentials') {
-                        echo "Building and pushing image: ${IMAGE_NAME}:${IMAGE_TAG}"
+                        echo "Building and pushing image..."
+                        // Achive the Dockerfile as this stage's artifact.
                         docker.build("${IMAGE_NAME}:${IMAGE_TAG}").push()
                     }
                 }
@@ -65,10 +64,14 @@ pipeline {
         }
     }
 
+    // To archive build artifacts after all stages pass.
     post {
-        success {
-            echo "Pipeline successful. Archiving the Dockerfile..."
-            archiveArtifacts artifacts: 'Dockerfile', allowEmptyArchive: true
+        always {
+            echo "Archiving build artifacts and logs..."
+            archiveArtifacts(
+                artifacts: '**/*.log, Dockerfile', 
+                allowEmptyArchive: true
+            )
         }
     }
 }

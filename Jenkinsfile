@@ -2,17 +2,20 @@ pipeline {
     agent {
         docker {
             image 'node:16-alpine'
-            args '-u root'
+            args '''
+                -u root 
+                -e DOCKER_HOST=tcp://docker:2376 
+                -e DOCKER_CERT_PATH=/certs/client 
+                -e DOCKER_TLS_VERIFY=1 
+                -v /certs/client:/certs/client:ro
+            '''
         }
     }
 
-    environment {
-        DOCKER_HOST       = 'tcp://docker:2376'
-        DOCKER_CERT_PATH  = '/certs/client'
-        DOCKER_TLS_VERIFY = '1'
 
+    environment {
         DOCKERHUB_USERNAME = 'xqy1'
-        IMAGE_NAME         = "${DOCKERHUB_USERNAME}/isec6000-nodejs-app"
+        IMAGE_NAME         = "${DOCKERHUB_USERNAME}/isec6000"
         IMAGE_TAG          = "1.0.${BUILD_NUMBER}"
     }
 

@@ -1,44 +1,47 @@
-// Jenkinsfile - Updated with external Dockerfile and logging
-
+// Jenkinsfile
 pipeline {
-    // We specify agents per-stage, so no top-level agent is needed.
+    // Specify agents per-stage for solving the issues of building image.
     agent none
 
     environment {
+        // Define DockerHub username and image details
         DOCKERHUB_USERNAME = 'xqy1' 
         IMAGE_NAME = "${DOCKERHUB_USERNAME}/isec6000"
-        IMAGE_TAG  = "1.0.${BUILD_NUMBER}"
+        IMAGE_TAG  = "Final"
     }
-
+    
+    // Stage 1: Install Node dependencies
     stages {
-
         stage('Install Dependencies') {
             agent {
                 docker {
-                    image 'node:16-alpine'
+                    image 'node:16-alpine'    // use Node 16 as build environment
                     args '-u root'
                 }
             }
             steps {
                 echo 'Installing NPM dependencies using npm ci...'
-                // Using 'npm ci' is a best practice for CI as it's faster and ensures a clean, consistent install from package-lock.json
+                // Install project dependencies and log output
                 sh 'npm install --save > install_dependencies.log 2>&1'
             }
         }
-
+        
+        // Stage 2: Run unit tests
         stage('Run Unit Tests') {
             agent {
                 docker {
-                    image 'node:16-alpine'
+                    image 'node:16-alpine'    // same Node 16 image
                     args '-u root'
                 }
             }
             steps {
                 echo 'Running unit tests...'
+                // run test commands and save logs
                 sh 'npm test > run_unit_tests.log 2>&1'
             }
         }
         
+        // Stage 3: Security scan using Snyk
         stage('Security Scan with Snyk') {
             agent {
                 docker {
@@ -48,6 +51,7 @@ pipeline {
             }
             steps {
                 script {
+                    // Use Jenkins credentials for Snyk authentication
                     withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
                         echo 'Installing Snyk CLI...'
                         sh 'npm install -g snyk > snyk_install.log 2>&1'
@@ -61,16 +65,18 @@ pipeline {
                 }
             }
         }
-
+        
+        // Stage 4: Build & Push Docker image
         stage('Build and Push Docker Image') {
-            // This stage runs on the main Jenkins agent, which needs access to the Docker daemon.
+            // Run this on Jenkins agent to solve issues of this stage.
             agent any
             steps {
-                script {                    
+                script {  
+                    // Login to DockerHub using stored credentials
                     docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-credentials') {
                         echo "Building and pushing image: ${IMAGE_NAME}:${IMAGE_TAG}"
                         
-                        // docker.build will automatically find the Dockerfile in the workspace root.
+                        // Build Docker image and push it
                         docker.build("${IMAGE_NAME}:${IMAGE_TAG}").push()
                     }
                 }
@@ -78,12 +84,13 @@ pipeline {
         }
     }
 
-    // This block runs after all stages are finished.
+    // Post and archivie artifacts. 
 post {
     always {
         script {
             node {
                 echo "Archiving build artifacts and logs..."
+                // Save all .log files and Dockerfile as build artifacts
                 archiveArtifacts(
                     artifacts: '**/*.log, Dockerfile', 
                     allowEmptyArchive: true

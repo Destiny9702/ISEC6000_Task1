@@ -87,14 +87,16 @@ pipeline {
 
     // Post and archive artifacts. 
     post {
-        always {
-            node('master') {
+    always {
+        script {
+            node {
                 echo "Archiving build artifacts and logs..."
                 // Save all .log files and Dockerfile as build artifacts
                 archiveArtifacts(
                     artifacts: '**/*.log, Dockerfile', 
                     allowEmptyArchive: true
-                )
+                    )
+                }
             }
         }
     }

@@ -38,7 +38,7 @@ pipeline {
                 sh 'npm test > run_unit_tests.log 2>&1'
             }
         }
-
+        
         stage('Security Scan with Snyk') {
             agent {
                 docker {

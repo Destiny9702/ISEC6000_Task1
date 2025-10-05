@@ -22,8 +22,7 @@ pipeline {
             steps {
                 echo 'Installing NPM dependencies using npm ci...'
                 // Using 'npm ci' is a best practice for CI as it's faster and ensures a clean, consistent install from package-lock.json
-                sh 'npm install --save > install_dependencies.log 2>&1' 
-
+                sh 'npm install --save > install_dependencies.log 2>&1'
             }
         }
 

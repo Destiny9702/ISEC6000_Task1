@@ -6,8 +6,8 @@ pipeline {
 
     environment {
         DOCKERHUB_USERNAME = 'xqy1' 
-        IMAGE_NAME         = "${DOCKERHUB_USERNAME}/isec6000"
-        IMAGE_TAG          = "1.0.${BUILD_NUMBER}"
+        IMAGE_NAME = "${DOCKERHUB_USERNAME}/isec6000"
+        IMAGE_TAG  = "1.0.${BUILD_NUMBER}"
     }
 
     stages {
@@ -69,11 +69,10 @@ pipeline {
             steps {
                 script {                    
                     docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-credentials') {
-                        def fullImageName = "${DOCKERHUB_USERNAME}/${IMAGE_NAME}"
-                        echo "Building and pushing image: ${fullImageName}:${IMAGE_TAG}"
+                        echo "Building and pushing image: ${IMAGE_NAME}:${IMAGE_TAG}"
                         
                         // docker.build will automatically find the Dockerfile in the workspace root.
-                        docker.build("${fullImageName}:${IMAGE_TAG}").push()
+                        docker.build("${IMAGE_NAME}:${IMAGE_TAG}").push()
                     }
                 }
             }

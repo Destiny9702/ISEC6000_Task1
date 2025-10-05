@@ -1,22 +1,21 @@
 pipeline {
-    // Specify agents per-stage, so no top-level agent is needed.
     agent none
 
     environment {
-        DOCKERHUB_USERNAME = 'xqy1' 
-        IMAGE_NAME         = "${DOCKERHUB_USERNAME}/isec6000"
-        IMAGE_TAG          = "1.0.${BUILD_NUMBER}"
+        DOCKERHUB_USERNAME = 'xqy1'
+        IMAGE_NAME = "${DOCKERHUB_USERNAME}/isec6000"
+        IMAGE_TAG = "1.0.${BUILD_NUMBER}"
     }
 
     stages {
-        
         stage('Prepare Build Environment') {
+            agent any
             steps {
                 echo 'Installing Docker CLI...'
                 sh 'apk add --no-cache docker-cli > prepare_environment.log 2>&1'
             }
         }
-        
+
         stage('Install Dependencies') {
             agent {
                 docker {
@@ -26,6 +25,7 @@ pipeline {
             }
             steps {
                 echo 'Installing dependencies...'
+                sh 'node -v && npm -v'
                 sh 'npm install --save > install_dependencies.log 2>&1'
             }
         }
@@ -39,7 +39,6 @@ pipeline {
             }
             steps {
                 echo 'Running unit tests...'
-                sh 'npm test'
                 sh 'npm test > run_unit_tests.log 2>&1'
             }
         }
@@ -66,35 +65,33 @@ pipeline {
         }
 
         stage('Build and Push Docker Image') {
+            agent any
             steps {
                 script {
                     echo "Building Docker image: ${IMAGE_NAME}:${IMAGE_TAG}"
-                    
-                    // Build the Docker image
+
                     sh """
                         docker build -t ${IMAGE_NAME}:${IMAGE_TAG} . > docker_build.log 2>&1
                         docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest
                     """
-                    
-                    // Push to Docker Hub
-                    withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', 
-                                                      usernameVariable: 'DOCKER_USER', 
-                                                      passwordVariable: 'DOCKER_PASS')]) {
+
+                    withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials',
+                                                     usernameVariable: 'DOCKER_USER',
+                                                     passwordVariable: 'DOCKER_PASS')]) {
                         sh """
                             echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
                             docker push ${IMAGE_NAME}:${IMAGE_TAG} > docker_push.log 2>&1
                             docker push ${IMAGE_NAME}:latest >> docker_push.log 2>&1
                         """
-                        }
                     }
                 }
             }
-            
             post {
-            script {
+                always {
                     archiveArtifacts artifacts: '*.log', allowEmptyArchive: true
                     echo 'Pipeline execution completed.'
-                    }
                 }
             }
         }
+    }
+}

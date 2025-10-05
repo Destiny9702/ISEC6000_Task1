@@ -37,7 +37,7 @@ pipeline {
             steps {
                 echo 'Running unit tests...'
                 // run test commands and save logs
-                sh 'npm test > run_unit_tests.log 2>&1'
+                sh 'npm test 2>&1 | tee run_unit_tests.log'
             }
         }
         
@@ -54,13 +54,13 @@ pipeline {
                     // Use Jenkins credentials for Snyk authentication
                     withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
                         echo 'Installing Snyk CLI...'
-                        sh 'npm install -g snyk > snyk_install.log 2>&1'
+                        sh 'npm install -g snyk 2>&1 | tee snyk_install.log'
                         
                         echo 'Authenticating with Snyk...'
-                        sh 'snyk auth ${SNYK_TOKEN} > snyk_auth.log 2>&1'
+                        sh 'snyk auth ${SNYK_TOKEN} 2>&1 | tee snyk_auth.log'
 
                         echo 'Scanning for vulnerabilities...'
-                        sh 'snyk test --severity-threshold=high > snyk_scan.log 2>&1'
+                        sh 'snyk test --severity-threshold=high 2>&1 | tee snyk_scan.log'
                     }
                 }
             }
@@ -76,27 +76,26 @@ pipeline {
                     docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-credentials') {
                         echo "Building and pushing image: ${IMAGE_NAME}:${IMAGE_TAG}"
                         
-                        // Build Docker image and push it
-                        docker.build("${IMAGE_NAME}:${IMAGE_TAG}").push()
+                        // Build Docker image, push it and save logs.
+                        sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} . 2>&1 | tee docker_build.log"
+                        sh "docker push ${IMAGE_NAME}:${IMAGE_TAG} 2>&1 | tee docker_push.log"
                     }
                 }
             }
         }
     }
 
-    // Post and archivie artifacts. 
-post {
-    always {
-        script {
-            node {
+    // Post and archive artifacts. 
+    post {
+        always {
+            node('master') {
                 echo "Archiving build artifacts and logs..."
                 // Save all .log files and Dockerfile as build artifacts
                 archiveArtifacts(
                     artifacts: '**/*.log, Dockerfile', 
                     allowEmptyArchive: true
-                    )
-                }
+                )
             }
         }
     }
-}    
+}

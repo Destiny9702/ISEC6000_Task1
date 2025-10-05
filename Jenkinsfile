@@ -66,13 +66,14 @@ pipeline {
             }
         }
         
-        // Stage 4: Build & Push Docker image，use agent fix issues.
+        // Stage 4: Build & Push Docker image，use agent fix issues
         stage('Build and Push Docker Image') {
             agent {
                 docker {
                     image 'docker:20.10.7'
                     args '''
-                        -u 1000:1000
+                        // FIX #1: Run as root for permissions
+                        -u root
                         --network jenkins_net
                         -v jenkins-docker-certs:/certs/client:ro
                         -v jenkins-data:/var/jenkins_home
@@ -85,21 +86,17 @@ pipeline {
             steps {
                 script {
                     echo "Building and pushing image: ${IMAGE_NAME}:${IMAGE_TAG}"
+                    sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} . 2>&1 | tee docker_build.log"
                     
-                    // Build the Docker image from Dockerfile and save output to log
-                    sh 'docker build -t ${IMAGE_NAME}:${IMAGE_TAG} . 2>&1 | tee docker_build.log'
-                    
-                    // Login to DockerHub using credentials stored in Jenkins
                     withCredentials([usernamePassword(
                         credentialsId: 'dockerhub-credentials',
                         usernameVariable: 'DOCKER_USER',
                         passwordVariable: 'DOCKER_PASS'
                     )]) {
+                        // Single quotes are correct here as we want the SHELL to expand the variables
                         sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin 2>&1 | tee docker_login.log'
                     }
-                    
-                    // Push the built image to DockerHub registry
-                    sh 'docker push ${IMAGE_NAME}:${IMAGE_TAG} 2>&1 | tee docker_push.log'
+                    sh "docker push ${IMAGE_NAME}:${IMAGE_TAG} 2>&1 | tee docker_push.log"
                     
                     echo "Successfully built and pushed ${IMAGE_NAME}:${IMAGE_TAG}"
                 }

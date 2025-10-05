@@ -79,12 +79,11 @@ pipeline {
     }
 
     // This block runs after all stages are finished.
-    post {
-        // 'always' ensures that we archive logs even if the pipeline fails.
-        always {
+post {
+    always {
+        node {
             echo "Archiving build artifacts and logs..."
             
-            // This single step archives all .log files and the Dockerfile.
             archiveArtifacts(
                 artifacts: '**/*.log, Dockerfile', 
                 allowEmptyArchive: true

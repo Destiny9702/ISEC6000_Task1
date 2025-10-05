@@ -71,32 +71,27 @@ pipeline {
             agent {
                 docker {
                     image 'docker:20.10.7'
-                    args '''
-                        // FIX #1: Run as root for permissions
-                        -u root
-                        --network jenkins_net
-                        -v jenkins-docker-certs:/certs/client:ro
-                        -v jenkins-data:/var/jenkins_home
-                        -e DOCKER_HOST=tcp://docker:2376
-                        -e DOCKER_CERT_PATH=/certs/client
-                        -e DOCKER_TLS_VERIFY=1
-                    '''
+                    args '-u root --network jenkins_net -v jenkins-docker-certs:/certs/client:ro -v jenkins-data:/var/jenkins_home -e DOCKER_HOST=tcp://docker:2376 -e DOCKER_CERT_PATH=/certs/client -e DOCKER_TLS_VERIFY=1'
                 }
             }
             steps {
                 script {
                     echo "Building and pushing image: ${IMAGE_NAME}:${IMAGE_TAG}"
-                    sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} . 2>&1 | tee docker_build.log"
                     
+                    // Build the Docker image from Dockerfile and save output to log
+                    sh 'docker build -t ${IMAGE_NAME}:${IMAGE_TAG} . 2>&1 | tee docker_build.log'
+                    
+                    // Login to DockerHub using credentials stored in Jenkins
                     withCredentials([usernamePassword(
                         credentialsId: 'dockerhub-credentials',
                         usernameVariable: 'DOCKER_USER',
                         passwordVariable: 'DOCKER_PASS'
                     )]) {
-                        // Single quotes are correct here as we want the SHELL to expand the variables
                         sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin 2>&1 | tee docker_login.log'
                     }
-                    sh "docker push ${IMAGE_NAME}:${IMAGE_TAG} 2>&1 | tee docker_push.log"
+                    
+                    // Push the built image to DockerHub registry
+                    sh 'docker push ${IMAGE_NAME}:${IMAGE_TAG} 2>&1 | tee docker_push.log'
                     
                     echo "Successfully built and pushed ${IMAGE_NAME}:${IMAGE_TAG}"
                 }

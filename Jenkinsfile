@@ -1,4 +1,4 @@
-// Jenkinsfile
+// Jenkinsfile 
 pipeline {
     // Specify agents per-stage for solving the issues of building image.
     agent none
@@ -7,9 +7,9 @@ pipeline {
         // Define DockerHub username and image details
         DOCKERHUB_USERNAME = 'xqy1' 
         IMAGE_NAME = "${DOCKERHUB_USERNAME}/isec6000"
-        IMAGE_TAG  = "Final"
+        IMAGE_TAG  = "1.0.${BUILD_NUMBER}"
     }
-    
+
     // Stage 1: Install Node dependencies
     stages {
         stage('Install Dependencies') {
@@ -37,7 +37,7 @@ pipeline {
             steps {
                 echo 'Running unit tests...'
                 // run test commands and save logs
-                sh 'npm test 2>&1 | tee run_unit_tests.log'
+                sh 'npm test > run_unit_tests.log 2>&1'
             }
         }
         
@@ -54,13 +54,13 @@ pipeline {
                     // Use Jenkins credentials for Snyk authentication
                     withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
                         echo 'Installing Snyk CLI...'
-                        sh 'npm install -g snyk 2>&1 | tee snyk_install.log'
+                        sh 'npm install -g snyk > snyk_install.log 2>&1'
                         
                         echo 'Authenticating with Snyk...'
-                        sh 'snyk auth ${SNYK_TOKEN} 2>&1 | tee snyk_auth.log'
+                        sh 'snyk auth ${SNYK_TOKEN} > snyk_auth.log 2>&1'
 
                         echo 'Scanning for vulnerabilities...'
-                        sh 'snyk test --severity-threshold=high 2>&1 | tee snyk_scan.log'
+                        sh 'snyk test --severity-threshold=high > snyk_scan.log 2>&1'
                     }
                 }
             }
@@ -68,39 +68,22 @@ pipeline {
         
         // Stage 4: Build & Push Docker image，use agent fix issues
         stage('Build and Push Docker Image') {
-            agent {
-                docker {
-                    image 'docker:20.10.7'
-                    args '-u root --network jenkins_net -v jenkins-docker-certs:/certs/client:ro -v jenkins-data:/var/jenkins_home -e DOCKER_HOST=tcp://docker:2376 -e DOCKER_CERT_PATH=/certs/client -e DOCKER_TLS_VERIFY=1'
-                }
-            }
+            agent any
             steps {
-                script {
-                    echo "Building and pushing image: ${IMAGE_NAME}:${IMAGE_TAG}"
-                    
-                    // Build the Docker image from Dockerfile and save output to log
-                    sh 'docker build -t ${IMAGE_NAME}:${IMAGE_TAG} . 2>&1 | tee docker_build.log'
-                    
+                script { 
                     // Login to DockerHub using credentials stored in Jenkins
-                    withCredentials([usernamePassword(
-                        credentialsId: 'dockerhub-credentials',
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PASS'
-                    )]) {
-                        sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin 2>&1 | tee docker_login.log'
+                    docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-credentials') {
+                        echo "Building and pushing image: ${IMAGE_NAME}:${IMAGE_TAG}"
+                        // Build and push the Docker image to DockerHub registry and save output to log
+                        docker.build("${IMAGE_NAME}:${IMAGE_TAG}").push()
                     }
-                    
-                    // Push the built image to DockerHub registry
-                    sh 'docker push ${IMAGE_NAME}:${IMAGE_TAG} 2>&1 | tee docker_push.log'
-                    
-                    echo "Successfully built and pushed ${IMAGE_NAME}:${IMAGE_TAG}"
                 }
             }
         }
     }
-
-    // Post and archive artifacts. 
-    post {
+    
+// Post and archive artifacts. 
+post {
     always {
         script {
             node {
@@ -114,4 +97,4 @@ pipeline {
             }
         }
     }
-}
+}    

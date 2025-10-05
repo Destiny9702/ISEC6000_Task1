@@ -87,7 +87,8 @@ post {
             archiveArtifacts(
                 artifacts: '**/*.log, Dockerfile', 
                 allowEmptyArchive: true
-            )
+                )
+            }
         }
     }
-}
+}    

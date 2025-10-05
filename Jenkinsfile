@@ -46,20 +46,20 @@ pipeline {
                     args '-u root'
                 }
             }
-            // steps {
-            //     script {
-            //         withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
-            //             echo 'Installing Snyk CLI...'
-            //             sh 'npm install -g snyk > snyk_install.log 2>&1'
+            steps {
+                script {
+                    withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
+                        echo 'Installing Snyk CLI...'
+                        sh 'npm install -g snyk > snyk_install.log 2>&1'
                         
-            //             echo 'Authenticating with Snyk...'
-            //             sh 'snyk auth ${SNYK_TOKEN} > snyk_auth.log 2>&1'
+                        echo 'Authenticating with Snyk...'
+                        sh 'snyk auth ${SNYK_TOKEN} > snyk_auth.log 2>&1'
 
-            //             echo 'Scanning for vulnerabilities...'
-            //             sh 'snyk test --severity-threshold=high > snyk_scan.log 2>&1'
-            //         }
-            //     }
-            // }
+                        echo 'Scanning for vulnerabilities...'
+                        sh 'snyk test --severity-threshold=high > snyk_scan.log 2>&1'
+                    }
+                }
+            }
         }
 
         stage('Build and Push Docker Image') {

@@ -81,13 +81,14 @@ pipeline {
     // This block runs after all stages are finished.
 post {
     always {
-        node('master') {
-            echo "Archiving build artifacts and logs..."
-            
-            archiveArtifacts(
-                artifacts: '**/*.log, Dockerfile', 
-                allowEmptyArchive: true
-                )
+        script {
+            node {
+                echo "Archiving build artifacts and logs..."
+                archiveArtifacts(
+                    artifacts: '**/*.log, Dockerfile', 
+                    allowEmptyArchive: true
+                    )
+                }
             }
         }
     }

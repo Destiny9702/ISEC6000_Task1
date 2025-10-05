@@ -71,14 +71,24 @@ pipeline {
             // Run this on Jenkins agent to solve issues of this stage.
             agent any
             steps {
-                script {  
+                script {
                     // Login to DockerHub using stored credentials
                     docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-credentials') {
                         echo "Building and pushing image: ${IMAGE_NAME}:${IMAGE_TAG}"
                         
-                        // Build Docker image, push it and save logs.
-                        sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} . 2>&1 | tee docker_build.log"
-                        sh "docker push ${IMAGE_NAME}:${IMAGE_TAG} 2>&1 | tee docker_push.log"
+                        // Build Docker image and save logs (without tee to avoid permission issues)
+                        sh """
+                            docker build -t ${IMAGE_NAME}:${IMAGE_TAG} . > docker_build.log 2>&1
+                            echo "Docker build completed"
+                        """
+                        
+                        // Push Docker image and save logs
+                        sh """
+                            docker push ${IMAGE_NAME}:${IMAGE_TAG} > docker_push.log 2>&1
+                            echo "Docker push completed"
+                        """
+                        
+                        echo "Successfully built and pushed ${IMAGE_NAME}:${IMAGE_TAG}"
                     }
                 }
             }

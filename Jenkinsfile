@@ -81,7 +81,7 @@ pipeline {
     // This block runs after all stages are finished.
 post {
     always {
-        node {
+        node('master') {
             echo "Archiving build artifacts and logs..."
             
             archiveArtifacts(

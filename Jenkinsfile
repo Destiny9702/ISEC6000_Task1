@@ -66,30 +66,42 @@ pipeline {
             }
         }
         
-        // Stage 4: Build & Push Docker image
+        // Stage 4: Build & Push Docker image，use agent fix issues.
         stage('Build and Push Docker Image') {
-            // Run this on Jenkins agent to solve issues of this stage.
-            agent any
+            agent {
+                docker {
+                    image 'docker:20.10.7'
+                    args '''
+                        -u 1000:1000
+                        --network jenkins_net
+                        -v jenkins-docker-certs:/certs/client:ro
+                        -v jenkins-data:/var/jenkins_home
+                        -e DOCKER_HOST=tcp://docker:2376
+                        -e DOCKER_CERT_PATH=/certs/client
+                        -e DOCKER_TLS_VERIFY=1
+                    '''
+                }
+            }
             steps {
                 script {
-                    // Login to DockerHub using stored credentials
-                    docker.withRegistry('https://registry.hub.docker.com', 'dockerhub-credentials') {
-                        echo "Building and pushing image: ${IMAGE_NAME}:${IMAGE_TAG}"
-                        
-                        // Build Docker image and save logs (without tee to avoid permission issues)
-                        sh """
-                            docker build -t ${IMAGE_NAME}:${IMAGE_TAG} . > docker_build.log 2>&1
-                            echo "Docker build completed"
-                        """
-                        
-                        // Push Docker image and save logs
-                        sh """
-                            docker push ${IMAGE_NAME}:${IMAGE_TAG} > docker_push.log 2>&1
-                            echo "Docker push completed"
-                        """
-                        
-                        echo "Successfully built and pushed ${IMAGE_NAME}:${IMAGE_TAG}"
+                    echo "Building and pushing image: ${IMAGE_NAME}:${IMAGE_TAG}"
+                    
+                    // Build the Docker image from Dockerfile and save output to log
+                    sh 'docker build -t ${IMAGE_NAME}:${IMAGE_TAG} . 2>&1 | tee docker_build.log'
+                    
+                    // Login to DockerHub using credentials stored in Jenkins
+                    withCredentials([usernamePassword(
+                        credentialsId: 'dockerhub-credentials',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )]) {
+                        sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin 2>&1 | tee docker_login.log'
                     }
+                    
+                    // Push the built image to DockerHub registry
+                    sh 'docker push ${IMAGE_NAME}:${IMAGE_TAG} 2>&1 | tee docker_push.log'
+                    
+                    echo "Successfully built and pushed ${IMAGE_NAME}:${IMAGE_TAG}"
                 }
             }
         }
